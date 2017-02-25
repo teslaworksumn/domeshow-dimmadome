@@ -52,7 +52,7 @@ void setup(void)
     //Set up timer and PWM Frequencies
     //PWM Duty cycle is CCPRxL (low byte) and CCPRxH (high byte)
     T2CON = 0b00000100;         //Enable TMR2 with prescaler = 1
-    PR2 = 249;                  //PWM period = (PR2+1) * prescaler * Tcy = 1ms
+    PR2 = 254;                  //PWM period = (PR2+1) * prescaler * Tcy = 1ms
     CCPR1L = 25;                //pulse width = CCPR1L * prescaler * Tcy = 100us
 }
 
