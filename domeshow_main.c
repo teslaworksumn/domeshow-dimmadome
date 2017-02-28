@@ -105,13 +105,13 @@ void main(void)
     
     setup();
 
-    //Start everything as off
-    CCPR4H = 0;
-    CCPR5H = 0;
-    CCPR6H = 0;
-    CCPR7H = 0;
-    CCPR8H = 0;
-    CCPR9H = 0;
+    //Start with everything off
+    CCPR4L = 255;
+    CCPR5L = 255;
+    CCPR6L = 255;
+    CCPR7L = 255;
+    CCPR8L = 255;
+    CCPR9L = 255;
     
     while(1)
     {
