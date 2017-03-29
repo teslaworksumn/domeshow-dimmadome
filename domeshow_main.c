@@ -11,6 +11,7 @@
 #include <xc.h>
 #include <stdint.h>
 #include <pic18f47j13.h>
+#include "domeshow_lib.h"
 
 #pragma config XINST = OFF      //Allows use of MPLab simulator for debugging
 
@@ -25,12 +26,6 @@ volatile int localChannel = 0;  //Keep track of which channel on the board
 volatile char dmxByte;          //This will hold the raw DMX read
 volatile uint8_t channelValues[BOARD_CHANNELS];
 
-void delay() {
-    asm("repeat #11999");
-    asm("nop");
-}
-
-
 void setup(void)
 {
     //Clock: Page 42 of datasheet
@@ -43,7 +38,17 @@ void setup(void)
     BAUDCON1bits.BRG16 = 1;     //Enable 16-bit baudrate
     SPBRG1 = 1;                 //Baud=Fosc/(16*(SPBRG1+1)) Set baudrate 250kbps
                                 //What is Fosc? 8MHz?
+                                //Haha nobody knows what's happening here.
     
+    /*
+     * CCP4:R1
+     * CCP5:G1
+     * CCP6:B1
+     * CCP7:R2
+     * CCP8:G2
+     * CCP9:B2
+     */
+
     //Set up output
     CCP4CONbits.CCP4M = 0b1100;
     CCP5CONbits.CCP5M = 0b1100;
@@ -69,10 +74,10 @@ void setup(void)
     CCPR1L = 25;                //pulse width = CCPR1L * prescaler * Tcy * 4
 }
 
-//Copied the attribute from Kia
-//Previously just had interrupt
-void __attribute__((__interrupt__)) ISR() {
-    if(PIR1bits.RC1IF == 1) {   //If interrupt on UEART receive
+//Not sure if this will register correctly
+//Compiler isn't registering this.
+void __attribute__((__interrupt__)) _RC1IFInterrupt() {
+    if(PIR1bits.RC1IF == 1) {   //If interrupt on EUART receive
         PIR1bits.RC1IF = 0;     //Reset it to 0.
         if(RCSTA1bits.FERR) {
             channel = 0;        //If end of signal
@@ -87,6 +92,16 @@ void __attribute__((__interrupt__)) ISR() {
         if((channel >= (BOARD_CHANNELS * board)) && (localChannel < BOARD_CHANNELS)) {
             channelValues[localChannel] = dmxByte;  //Keep track of DMX data
             localChannel++;                         //The go to the next channel
+        }
+    }
+}
+
+void cycle() {
+    while(1) {
+        int i = 0;
+        for(; i < 255; i++){
+            writePackedColor(Wheel(i));
+            __delay_ms(5);
         }
     }
 }
@@ -110,69 +125,6 @@ void write() {
     CCPR8L = channelValues[4];      //RP12
     CCPR9L = channelValues[5];      //RP17
 }
-
-
-void writeColor(int r, int g, int b) {
-    CCPR5L = 255 - r;
-    CCPR4L = 255 - g;
-    CCPR10L = 255 -b;
-}
-
-void drawFrame(int frame) {
-    int r = frame;
-    int b = 255 - frame;
-    int g = 0;
-    writeColor(r, g, b);
-}
-
-uint32_t packColor(int r, int g, int b) {
-	return (((long) r << 16) | ((long) g << 8) | ((long) b));
-}
-
-int getR(uint32_t x) {
-	return (int) (x >> 16);
-}
-
-int getG(uint32_t x) {
-	return (int) (x >> 8);
-}
-
-int getB(uint32_t x) {
-	return (int) (x);
-}
-
-void writePackedColor(uint32_t x) {
-	writeColor(getR(x), getG(x), getB(x));
-}
-
-uint32_t Wheel(int WheelPos) {
-	WheelPos = 255 - WheelPos;
-	if(WheelPos < 85) {
-		return packColor(255 - WheelPos * 3, 0, WheelPos * 3);
-	}
-	if(WheelPos < 170) {
-		WheelPos -= 85;
-		return packColor(0, WheelPos * 3, 255 - WheelPos * 3);
-	}
-	WheelPos -= 170;
-	return packColor(WheelPos * 3, 255 - WheelPos * 3, 0);
-}
-
-void cycle() {
-    while(1) {
-        int i = 0;
-        for(; i < 255; i++){
-            writePackedColor(Wheel(i));
-            __delay_ms(5);
-        }
-    }
-}
-
-
-
-
-
-
 
 void main(void)
 {
