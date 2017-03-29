@@ -110,14 +110,6 @@ void write() {
     //Do the actual writing to the ports.
     //TODO: Fix scaling
     
-    //Test
-    channelValues[0] = 90;
-    channelValues[1] = 90;
-    channelValues[2] = 90;
-    channelValues[3] = 90;
-    channelValues[4] = 90;
-    channelValues[5] = 90;
-    
     CCPR4L = channelValues[0];      //RP7
     CCPR5L = channelValues[1];      //RP8
     CCPR6L = channelValues[2];      //RP9
