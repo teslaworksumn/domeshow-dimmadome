@@ -130,21 +130,11 @@ void main(void)
     CCPR7L = 255;
     CCPR8L = 255;
     CCPR9L = 255;
-    
-    int i = 0;
-    
+        
     while(1)
     {
         
         cycle();
-        
-//        CCPR4L -= 5;
-//        CCPR5L = 50;
-//        CCPR6L = 100;
-//        CCPR7L = 150;
-//        CCPR8L = 200;
-//        CCPR9L = 230;
-//        write();
         
         __delay_ms(5);
     }
