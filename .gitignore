@@ -31,5 +31,7 @@
 # Debug files
 *.dSYM/
 *.su
+
+# MPLAB Build/Production Files
 /build/default/
 /dist/default/
