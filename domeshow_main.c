@@ -8,7 +8,7 @@
  * 
  */
 
-#define TRANSMIT
+//#define TRANSMIT
 
 #include <xc.h>
 #include <stdint.h>
@@ -71,11 +71,13 @@
 #define BOARD_CHANNELS 6        //Channels per chip
 
 volatile int board = BOARD_NUM; //Figure out a better way to set this
-volatile int channel = 0;       //Initialize channel to 0. Read from 0 -> 512
-volatile int localChannel = 0;  //Keep track of which channel on the board
-volatile char dmxByte;          //This will hold the raw DMX read
-volatile uint8_t txByte;
 volatile uint8_t channelValues[BOARD_CHANNELS];
+volatile uint16_t channel;       //Initialize channel to 0. Read from 0 -> 512
+volatile uint8_t localChannel;  //Keep track of which channel on the board
+volatile char dmxByte;          //This will hold the raw DMX read
+#ifdef TRANSMIT
+volatile char txByte;
+#endif
 
 void setup(void)
 {
@@ -86,7 +88,7 @@ void setup(void)
     RCSTA1bits.CREN = 1;        //Enable receiver
     TXSTA1bits.TXEN = 0;        //Disable serial port send
     RCSTA1bits.SPEN = 1;        //Enable serial port receive
-    RCSTA1bits.RX9 = 0;         //8-bit receive
+    RCSTA1bits.RX9 = 1;         //9-bit receive (DMX has two stop bits)
     TRISCbits.TRISC7 = 1;       //Enable input
     TRISCbits.TRISC6 = 0;
     INTCONbits.GIE = 1;         //Enable global interrupts
@@ -139,37 +141,39 @@ void setup(void)
 #ifdef TRANSMIT
     TRISCbits.TRISC6 = 0;
     TXSTA1bits.TXEN = 1;        //Enable serial port send
-
+    
 #endif
 }
 
 void interrupt RC1IFInterrupt() {
+    static char stopBit;
+    
     if(PIR1bits.RC1IF == 1) {   //If interrupt on EUART receive
+        PIE1bits.RC1IE = 0;     //Disable interrupts while we do our thing
+//        PIR1bits.RC1IF == 0;  //Enable EUART interrupts
         if(RCSTA1bits.FERR) {
             // Frame error; start of packet
-            channel = 0;        //If end of signal
-            localChannel = 0;   //Keep track of which channel in the board
-            //dmxByte = RCREG1;   //Skip next byte (MAB)
-        }
-        else if(RCSTA1bits.OERR)
-        {
-            RCSTA1bits.CREN = 0;
-        }
-        else {
-            channel++;          //Next channel
+            channel = 0x0;          //If end of signal
+            localChannel = 0x0;     //Keep track of which channel in the board
+            dmxByte = RCREG1;       //Get next byte
+            stopBit = RX91;         //Get next stop byte
+            PIE1bits.RC1IE = 1;     //Enable interrupts again
+            return;
         }
         
+        // Valid data; continue
+        channel++;          //Next channel    
         dmxByte = RCREG1;   //Read data
+        stopBit = RX91;     //Read stop bit
         
-        //If we're in the right range of values for this board
-        if((channel >= (BOARD_CHANNELS * board)) && (localChannel < BOARD_CHANNELS)) {
-            channelValues[localChannel] = (uint8_t)dmxByte; //Keep track of DMX data
-            localChannel++;                                 //Then go to the next channel
-        }
-
-        TXREG = (char)localChannel;
-    }
-    PIR1bits.RC1IF == 0;
+        int maybeInBoard = channel >= BOARD_CHANNELS * board;
+        int locallyWithinBoard = localChannel < BOARD_CHANNELS;
+        if(maybeInBoard && locallyWithinBoard) {
+            channelValues[localChannel] = dmxByte; //Keep track of DMX data
+            localChannel++;                        //Then go to the next channel
+        }            
+        PIE1bits.RC1IE = 1;     //Enable interrupts again
+    }    
 }
 
 void cycle() {
@@ -185,7 +189,6 @@ void cycle() {
 void write() {
     //Do the actual writing to the ports.
     //TODO: Fix scaling
-    
     //Test
     /*channelValues[0] = 90;
     channelValues[1] = 90;
@@ -231,6 +234,7 @@ void main(void)
     while(1)
     {
         write();
+        __delay_ms(5);
 //        i = (i+1)%256;
 //        write(i);
 //        
@@ -247,7 +251,7 @@ void main(void)
 //        CCPR9L = 230;
 //        write();
         
-        __delay_ms(5);
+//        __delay_ms(5);
     }
     return;
 }
