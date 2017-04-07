@@ -69,7 +69,6 @@
 #define BOARD_CHANNELS 6        //Channels per chip
 
 volatile int board = BOARD_NUM; //Figure out a better way to set this
-volatile int startChannel = board * BOARD_CHANNELS;
 volatile uint8_t channelValues[255];
 volatile uint16_t channel;       //Initialize channel to 0. Read from 0 -> 512
 
@@ -174,6 +173,9 @@ void cycle() {
 
 void write() {
     //Do the actual writing to the ports.
+    
+    int startChannel = board * BOARD_CHANNELS;
+    
     //TODO: Fix scaling
     //Test
     /*channelValues[0] = 90;
