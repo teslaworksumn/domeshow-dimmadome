@@ -8,13 +8,20 @@
  * 
  */
 
+#define TRANSMIT
+
+#include <xc.h>
+#include <stdint.h>
+#include <pic18f47j13.h>
+#include "domeshow_lib.h"
+
 // PIC18F47J13 Configuration Bit Settings
 
 // 'C' source line config statements
 
 // CONFIG1L
-#pragma config WDTEN = OFF       // Watchdog Timer (Enabled)
-#pragma config PLLDIV = 1       // 96MHz PLL Prescaler Selection (PLLSEL=0) (Divide by 3 (12 MHz oscillator input))
+#pragma config WDTEN = ON       // Watchdog Timer (Enabled)
+#pragma config PLLDIV = 12      // 96MHz PLL Prescaler Selection (PLLSEL=0) (Divide by 12 (48 MHz oscillator input))
 #pragma config CFGPLLEN = ON    // PLL Enable Configuration Bit (PLL Enabled)
 #pragma config STVREN = ON      // Stack Overflow/Underflow Reset (Enabled)
 //#pragma config XINST = ON       // Extended Instruction Set (Enabled)
@@ -25,9 +32,9 @@
 // CONFIG2L
 #pragma config OSC = INTOSCPLL  // Oscillator (INTOSCPLL)
 #pragma config SOSCSEL = HIGH   // T1OSC/SOSC Power Selection Bits (High Power T1OSC/SOSC circuit selected)
-#pragma config CLKOEC = OFF      // EC Clock Out Enable Bit  (CLKO output disabled on the RA6 pin)
+#pragma config CLKOEC = ON      // EC Clock Out Enable Bit  (CLKO output enabled on the RA6 pin)
 #pragma config FCMEN = ON       // Fail-Safe Clock Monitor (Enabled)
-#pragma config IESO = OFF        // Internal External Oscillator Switch Over Mode (Disabled)
+#pragma config IESO = ON        // Internal External Oscillator Switch Over Mode (Enabled)
 
 // CONFIG2H
 #pragma config WDTPS = 32768    // Watchdog Postscaler (1:32768)
@@ -53,24 +60,16 @@
 #pragma config WPDIS = OFF      // Write Protect Disable bit (WPFP<6:0>/WPEND region ignored)
 #pragma config WPEND = PAGE_WPFP// Write/Erase Protect Region Select bit (valid when WPDIS = 0) (Pages WPFP<6:0> through Configuration Words erase/write protected)
 
-// #pragma config statements should precede project file includes.
-// Use project enums instead of #define for ON and OFF.
-
-#include <xc.h>
-#include <stdint.h>
-#include <pic18f27j13.h>
-#include "domeshow_lib.h"
-
-#define TRANSMIT
-
 #define _XTAL_FREQ 32000000     //Fosc frequency for _delay
 
 #define BOARD_NUM 0             //Board/Chip number
 #define BOARD_CHANNELS 6        //Channels per chip
 
 volatile int board = BOARD_NUM; //Figure out a better way to set this
-volatile uint8_t channelValues[255];
-volatile uint16_t channel;       //Initialize channel to 0. Read from 0 -> 512
+volatile int channel = 0;       //Initialize channel to 0. Read from 0 -> 512
+volatile int localChannel = 0;  //Keep track of which channel on the board
+volatile char dmxByte;          //This will hold the raw DMX read
+volatile uint8_t channelValues[BOARD_CHANNELS];
 
 void setup(void)
 {
@@ -81,14 +80,13 @@ void setup(void)
     RCSTA1bits.CREN = 1;        //Enable receiver
     TXSTA1bits.TXEN = 0;        //Disable serial port send
     RCSTA1bits.SPEN = 1;        //Enable serial port receive
-    RCSTA1bits.RX9 = 1;         //9-bit receive (DMX has two stop bits)
     TRISCbits.TRISC7 = 1;       //Enable input
     TRISCbits.TRISC6 = 0;
     INTCONbits.GIE = 1;         //Enable global interrupts
     INTCONbits.PEIE = 1;        //Enable peripheral interrupts
     PIE1bits.RC1IE = 1;         //Enable interrupts
     BAUDCON1bits.BRG16 = 0;     //Enable 8-bit baudrate
-    SPBRG1 = 2;                 //Baud=Fosc/(64*(SPBRG1+1)) Set baudrate 250kbps
+    SPBRG1 = 1;                 //Baud=Fosc/(64*(SPBRG1+1)) Set baudrate 250kbps
                                 //What is Fosc? 48MHz
                                 //Haha nobody knows what's happening here.
     
@@ -134,30 +132,31 @@ void setup(void)
 #ifdef TRANSMIT
     TRISCbits.TRISC6 = 0;
     TXSTA1bits.TXEN = 1;        //Enable serial port send
-    
+
 #endif
 }
 
-void interrupt RC1IFInterrupt(void) {
-    char dmxByte;
-    char stopByte;
-    
+//Not sure if this will register correctly
+//Compiler isn't registering this.
+void interrupt RC1IFInterrupt() {
     if(PIR1bits.RC1IF == 1) {   //If interrupt on EUART receive
-        PIR1bits.RC1IF == 0;  //Reset EUART interrupt flag
+        PIR1bits.RC1IF = 0;     //Reset it to 0.
         if(RCSTA1bits.FERR) {
-            // Frame error; start of packet
-            channel = 0;        //Start over
-            return;
+            channel = 0;        //If end of signal
+            localChannel = 0;   //Keep track of which channel in the board
+            dmxByte = RCREG1;   //Start reading again
+            RCSTA1bits.CREN = 0;
         }
-        
-        // Normal byte; channel data
-        dmxByte = RCREG1;   //Read data
-        stopByte = RX91;    //Read stop bit
-        
-        channelValues[channel] = dmxByte;  //Keep track of DMX data
-        channel++;  //Then go to the next channel
-        char txByte = channel % 255;
-        TXREG=txByte;
+        else {
+            RC3 = 1;
+            channel++;          //Next channel
+            dmxByte = RCREG1;   //Read data
+        }
+        //If we're in the right range of values for this board
+        if((channel > (BOARD_CHANNELS * board)) && (localChannel < BOARD_CHANNELS)) {
+            channelValues[localChannel] = dmxByte;  //Keep track of DMX data
+            localChannel++;                         //The go to the next channel
+        }
     }
 }
 
@@ -171,12 +170,10 @@ void cycle() {
     }
 }
 
-void write() {
+void write(uint8_t i) {
     //Do the actual writing to the ports.
-    
-    int startChannel = board * BOARD_CHANNELS;
-    
     //TODO: Fix scaling
+    
     //Test
     /*channelValues[0] = 90;
     channelValues[1] = 90;
@@ -193,19 +190,12 @@ void write() {
     CCPR8L = 255-i;
     CCPR9L = 255-i;*/
     
-//    CCPR4L = 255-channelValues[0];      //RP7
-//    CCPR5L = 255-channelValues[1];      //RP8
-//    CCPR6L = 255-channelValues[2];      //RP9
-//    CCPR7L = 255-channelValues[3];      //RP10
-//    CCPR8L = 255-channelValues[4];      //RP12
-//    CCPR9L = 255-channelValues[5];      //RP17
-    
-    CCPR4L = channelValues[startChannel+0];      //RP7
-    CCPR5L = channelValues[startChannel+1];      //RP8
-    CCPR6L = channelValues[startChannel+2];      //RP9
-    CCPR7L = channelValues[startChannel+3];      //RP10
-    CCPR8L = channelValues[startChannel+4];      //RP12
-    CCPR9L = channelValues[startChannel+5];      //RP17
+    CCPR4L = 255-channelValues[0];      //RP7
+    CCPR5L = 255-channelValues[1];      //RP8
+    CCPR6L = 255-channelValues[2];      //RP9
+    CCPR7L = 255-channelValues[3];      //RP10
+    CCPR8L = 255-channelValues[4];      //RP12
+    CCPR9L = 255-channelValues[5];      //RP17
 }
 
 void main(void)
@@ -219,14 +209,26 @@ void main(void)
     CCPR8L = 255;
     CCPR9L = 255;*/
     
+    int i = 0;
+    
     while(1)
     {
-        write();
 //        i = (i+1)%256;
 //        write(i);
+        
+        TXREG = 'a';
+        
+//        asm("btg LATC, #6");
+        
+//        i++;
 //        
+//        if (i%2 == 0) {
+//            RC6 = 1;
+//        } else {
+//            RC6 = 0;
+//        }
+        
 //        __delay_ms(5);
-        //TXREG = 'a';
         //RC3 = 1;
         //cycle();
         
@@ -238,7 +240,7 @@ void main(void)
 //        CCPR9L = 230;
 //        write();
         
-//        __delay_ms(5);
+        //__delay_ms(5);
     }
     return;
 }
