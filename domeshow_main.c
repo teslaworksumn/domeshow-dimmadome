@@ -8,21 +8,13 @@
  * 
  */
 
-//#define TRANSMIT
-
-#include <xc.h>
-#include <stdint.h>
-#include <pic18f47j13.h>
-#include "domeshow_lib.h"
-
-
 // PIC18F47J13 Configuration Bit Settings
 
 // 'C' source line config statements
 
 // CONFIG1L
-#pragma config WDTEN = ON       // Watchdog Timer (Enabled)
-#pragma config PLLDIV = 3       // 96MHz PLL Prescaler Selection (PLLSEL=0) (Divide by 3 (12 MHz oscillator input))
+#pragma config WDTEN = OFF       // Watchdog Timer (Enabled)
+#pragma config PLLDIV = 1       // 96MHz PLL Prescaler Selection (PLLSEL=0) (Divide by 3 (12 MHz oscillator input))
 #pragma config CFGPLLEN = ON    // PLL Enable Configuration Bit (PLL Enabled)
 #pragma config STVREN = ON      // Stack Overflow/Underflow Reset (Enabled)
 //#pragma config XINST = ON       // Extended Instruction Set (Enabled)
@@ -33,9 +25,9 @@
 // CONFIG2L
 #pragma config OSC = INTOSCPLL  // Oscillator (INTOSCPLL)
 #pragma config SOSCSEL = HIGH   // T1OSC/SOSC Power Selection Bits (High Power T1OSC/SOSC circuit selected)
-#pragma config CLKOEC = ON      // EC Clock Out Enable Bit  (CLKO output enabled on the RA6 pin)
+#pragma config CLKOEC = OFF      // EC Clock Out Enable Bit  (CLKO output disabled on the RA6 pin)
 #pragma config FCMEN = ON       // Fail-Safe Clock Monitor (Enabled)
-#pragma config IESO = ON        // Internal External Oscillator Switch Over Mode (Enabled)
+#pragma config IESO = OFF        // Internal External Oscillator Switch Over Mode (Disabled)
 
 // CONFIG2H
 #pragma config WDTPS = 32768    // Watchdog Postscaler (1:32768)
@@ -64,6 +56,12 @@
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
 
+#include <xc.h>
+#include <stdint.h>
+#include <pic18f27j13.h>
+#include "domeshow_lib.h"
+
+#define TRANSMIT
 
 #define _XTAL_FREQ 32000000     //Fosc frequency for _delay
 
@@ -71,13 +69,9 @@
 #define BOARD_CHANNELS 6        //Channels per chip
 
 volatile int board = BOARD_NUM; //Figure out a better way to set this
-volatile uint8_t channelValues[BOARD_CHANNELS];
+volatile int startChannel = board * BOARD_CHANNELS;
+volatile uint8_t channelValues[255];
 volatile uint16_t channel;       //Initialize channel to 0. Read from 0 -> 512
-volatile uint8_t localChannel;  //Keep track of which channel on the board
-volatile char dmxByte;          //This will hold the raw DMX read
-#ifdef TRANSMIT
-volatile char txByte;
-#endif
 
 void setup(void)
 {
@@ -95,7 +89,7 @@ void setup(void)
     INTCONbits.PEIE = 1;        //Enable peripheral interrupts
     PIE1bits.RC1IE = 1;         //Enable interrupts
     BAUDCON1bits.BRG16 = 0;     //Enable 8-bit baudrate
-    SPBRG1 = 1;                 //Baud=Fosc/(64*(SPBRG1+1)) Set baudrate 250kbps
+    SPBRG1 = 2;                 //Baud=Fosc/(64*(SPBRG1+1)) Set baudrate 250kbps
                                 //What is Fosc? 48MHz
                                 //Haha nobody knows what's happening here.
     
@@ -145,35 +139,27 @@ void setup(void)
 #endif
 }
 
-void interrupt RC1IFInterrupt() {
-    static char stopBit;
+void interrupt RC1IFInterrupt(void) {
+    char dmxByte;
+    char stopByte;
     
     if(PIR1bits.RC1IF == 1) {   //If interrupt on EUART receive
-        PIE1bits.RC1IE = 0;     //Disable interrupts while we do our thing
-//        PIR1bits.RC1IF == 0;  //Enable EUART interrupts
+        PIR1bits.RC1IF == 0;  //Reset EUART interrupt flag
         if(RCSTA1bits.FERR) {
             // Frame error; start of packet
-            channel = 0x0;          //If end of signal
-            localChannel = 0x0;     //Keep track of which channel in the board
-            dmxByte = RCREG1;       //Get next byte
-            stopBit = RX91;         //Get next stop byte
-            PIE1bits.RC1IE = 1;     //Enable interrupts again
+            channel = 0;        //Start over
             return;
         }
         
-        // Valid data; continue
-        channel++;          //Next channel    
+        // Normal byte; channel data
         dmxByte = RCREG1;   //Read data
-        stopBit = RX91;     //Read stop bit
+        stopByte = RX91;    //Read stop bit
         
-        int maybeInBoard = channel >= BOARD_CHANNELS * board;
-        int locallyWithinBoard = localChannel < BOARD_CHANNELS;
-        if(maybeInBoard && locallyWithinBoard) {
-            channelValues[localChannel] = dmxByte; //Keep track of DMX data
-            localChannel++;                        //Then go to the next channel
-        }            
-        PIE1bits.RC1IE = 1;     //Enable interrupts again
-    }    
+        channelValues[channel] = dmxByte;  //Keep track of DMX data
+        channel++;  //Then go to the next channel
+        char txByte = channel % 255;
+        TXREG=txByte;
+    }
 }
 
 void cycle() {
@@ -212,12 +198,12 @@ void write() {
 //    CCPR8L = 255-channelValues[4];      //RP12
 //    CCPR9L = 255-channelValues[5];      //RP17
     
-    CCPR4L = channelValues[0];      //RP7
-    CCPR5L = channelValues[1];      //RP8
-    CCPR6L = channelValues[2];      //RP9
-    CCPR7L = channelValues[3];      //RP10
-    CCPR8L = channelValues[4];      //RP12
-    CCPR9L = channelValues[5];      //RP17
+    CCPR4L = channelValues[startChannel+0];      //RP7
+    CCPR5L = channelValues[startChannel+1];      //RP8
+    CCPR6L = channelValues[startChannel+2];      //RP9
+    CCPR7L = channelValues[startChannel+3];      //RP10
+    CCPR8L = channelValues[startChannel+4];      //RP12
+    CCPR9L = channelValues[startChannel+5];      //RP17
 }
 
 void main(void)
@@ -234,7 +220,6 @@ void main(void)
     while(1)
     {
         write();
-        __delay_ms(5);
 //        i = (i+1)%256;
 //        write(i);
 //        
