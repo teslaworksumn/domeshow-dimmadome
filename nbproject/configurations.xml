@@ -18,6 +18,9 @@
       <itemPath>dmx.h</itemPath>
       <itemPath>dmxconfig.h</itemPath>
       <itemPath>dome_main.c</itemPath>
+      <itemPath>crc16_xmodem.c</itemPath>
+      <itemPath>crc16_xmodem.h</itemPath>
+      <itemPath>crc16_xmodem_LICENSE.txt</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -698,6 +701,12 @@
         <property key="stack-type" value="compiled"/>
       </XC8-config-global>
       <item path="domeshow_main.c" ex="true" overriding="false">
+        <HI-TECH-COMP>
+        </HI-TECH-COMP>
+        <HI-TECH-LINK>
+        </HI-TECH-LINK>
+        <XC8-config-global>
+        </XC8-config-global>
       </item>
     </conf>
   </confs>
