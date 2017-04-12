@@ -6,7 +6,7 @@
  */
 
 // This is a guard condition so that contents of this file are not included
-// more than once.  
+// more than once.
 #ifndef DOME_LIB
 #define	DOME_LIB
 
@@ -27,7 +27,7 @@ void uart_init()
     PIE1bits.RC1IE = 1;         //Enable interrupts
     BAUDCON1bits.BRG16 = 0;     //Enable 8-bit baudrate
     TXSTA1bits.BRGH = 0;
-    SPBRG1 = 2;                 //Baud=Fosc/(64*(SPBRG1+1)) Set baudrate 250kbps (2)
+    SPBRG1 = 12;                 //Baud=Fosc/(64*(SPBRG1+1)) Set baudrate 57600
 }
 
 void pin_init()
