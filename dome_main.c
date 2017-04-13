@@ -14,7 +14,7 @@
 #pragma config PLLDIV = 2       // THIS IS CORRECT DON'T CHANGE (2)
 #pragma config CFGPLLEN = OFF    // PLL Enable Configuration Bit (PLL Enabled)
 #pragma config STVREN = ON      // Stack Overflow/Underflow Reset (Enabled)
-//#pragma config XINST = ON       // Not supported in free XC8
+#pragma config XINST = OFF       // Not supported in free XC8
 
 // CONFIG1H
 #pragma config CP0 = OFF        // Code Protect (Program memory is not code-protected)
@@ -50,39 +50,38 @@
 #pragma config WPDIS = OFF      // Write Protect Disable bit (WPFP<6:0>/WPEND region ignored)
 #pragma config WPEND = PAGE_WPFP// Write/Erase Protect Region Select bit (valid when WPDIS = 0) (Pages WPFP<6:0> through Configuration Words erase/write protected)
 
-
-#include "xc.h"
 #include <stdint.h>
-#include <pic18f27j13.h>
+#include <xc.h>
 #include "domeshow_lib.h"
 #include "crc16_xmodem.h"
-//#include "dmxconfig.h"
-//#include "dmx.h"
 
 #define _XTAL_FREQ 48000000     //Fosc frequency for _delay
 
 #define CHIP_ADDRESS 0
 #define CHIP_CHANNELS 6
 #define TOTAL_CHANNELS 120
-#define RX_BUFFER_SIZE 0x02ff // 1024
-//#define BAUDPIN_OVERRIDE
+#define RX_BUFFER_SIZE 0x03ff // 1024
 
 // State of the domeshow RX
 typedef enum {
     DSCOM_STATE_READY,
     DSCOM_STATE_PRE_PROCESSING,
     DSCOM_STATE_PROCESSING
-} DSCOM_RX_STATE;
+} DSCOM_RX_STATE_t;
 
 uint8_t channelValues[TOTAL_CHANNELS];
-DSCOM_RX_STATE dscom_rx_state;
+DSCOM_RX_STATE_t dscom_rx_state = DSCOM_STATE_READY;
 volatile uint8_t rxData[RX_BUFFER_SIZE];
 uint16_t head = 0;
-volatile uint16_t tail = 0;
+volatile uint16_t tail;
 unsigned char crc_start = 0;
 unsigned char crc_end = 0;
 uint8_t num_magic_found = 0;
 uint8_t magic[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+
+void toggle() {
+    RC3 = !RC3;
+}
 
 void setup(void) {
     
@@ -94,8 +93,9 @@ void setup(void) {
     return;
 }
 
-void interrupt isr() {
+__interrupt(high_priority) void isr() {
     uint8_t rxByte;
+    uint16_t t;
 
     if(RC1IE & RC1IF)
     {
@@ -104,13 +104,16 @@ void interrupt isr() {
         // Check for framing error
         if(RCSTA1bits.FERR)
         {
-            toggle();
             TXREG1 = 0x97;
             rxByte = RCREG1; // Clear framing error
+        } else if (RCSTA1bits.OERR) {
+            // clear error
         } else {
             rxByte = RCREG1;
-            rxData[tail] = rxByte;
-            tail = (tail + 1) & RX_BUFFER_SIZE;
+            t = tail;
+            rxData[t] = rxByte;
+            t = (t + 1) & RX_BUFFER_SIZE;
+            tail = t;
         }
     }
 }
@@ -122,17 +125,7 @@ uint16_t get_tail() {
     return t;
 }
 
-void cycle() {
-    while(1) {
-        int i = 0;
-        for(; i < 255; i++){
-            writePackedColor(Wheel(i));
-            __delay_ms(5);
-        }
-    }
-}
-
-void write() {
+__inline void write() {
     //Not sure what's up with the ordering here...
     CCPR4L = channelValues[3];      //RP7
     CCPR5L = channelValues[1];      //RP8
@@ -147,9 +140,9 @@ void write() {
  * Intentionally off by one to account for race conditions with interrupts
  * (giving a one byte buffer between head and tail)
  */
-int bytes_available() {
-    int t = get_tail();
-    int available = t - head;
+uint16_t bytes_available() {
+    uint16_t t = get_tail();
+    uint16_t available = t - head;
     if (t < head) { // Looped around ring buffer
         available = RX_BUFFER_SIZE - head + t;
     }
@@ -160,8 +153,10 @@ int bytes_available() {
  * Reads in the next byte from the ring buffer and properly increments head.
  * Assumes that there is at least one byte to read
  */
-uint8_t read_byte() {
+__inline uint8_t read_byte() {
+    RC1IE = 0; // Disable interrupts to read value
     uint8_t byte = rxData[head];
+    RC1IE = 1; // Re-enable interrupts
     head = (head + 1) & RX_BUFFER_SIZE;
     return byte;
 }
@@ -170,19 +165,16 @@ uint8_t read_byte() {
  * Reads the next two bytes from the ring buffer as a uint16.
  * Assumes that there are at least two bytes to read
  */
-uint16_t read_two_bytes() {
-    uint16_t highByte = rxData[head] << 8;
-    head = (head + 1) & RX_BUFFER_SIZE;
-    uint16_t lowByte = rxData[head];
-    head = (head + 1) & RX_BUFFER_SIZE;
-    return highByte | lowByte;
+__inline uint16_t read_two_bytes() {
+    uint16_t highByte = read_byte();
+    uint16_t lowByte = read_byte();
+    return (highByte << 8) | lowByte;
 }
 
 void read_packet(uint16_t length) {
     unsigned int i = 0;
     while (i < length) {
-        channelValues[i] = rxData[head];
-        head = (head + 1) & RX_BUFFER_SIZE;
+        channelValues[i] = read_byte();
         i++;
     }
 }
@@ -193,17 +185,15 @@ int main(void) {
     
     uint8_t rxByte;
     uint16_t length;
-    int num_bytes;
+    uint16_t num_bytes;
     
     while(1)
     {
-        __delay_ms(5);
         switch (dscom_rx_state) {
             case DSCOM_STATE_READY:
                 // Wait for magic bytes
                 num_bytes = bytes_available();
                 if (num_bytes > 0) {
-                    RC3=1;
                     rxByte = read_byte();
                     if (rxByte == magic[num_magic_found]) {
                         num_magic_found++;
@@ -219,7 +209,6 @@ int main(void) {
                 }
                 break;
             case DSCOM_STATE_PRE_PROCESSING:
-                toggle();
                 // Decode length (two bytes)
                 if (bytes_available() >= 2) {
                     length = read_two_bytes();
@@ -234,14 +223,17 @@ int main(void) {
                     read_packet(length);
                     
                     // Verify using XMODEM 16 CRC
-                    uint16_t readCrc = read_two_bytes();
-                    uint16_t calculatedCrc = crc16xmodem(channelValues, length);
-                    if (readCrc == calculatedCrc) {
-                        // Valid packet (no corruption)
+//                    uint16_t readCrc = read_two_bytes();
+//                    uint16_t calculatedCrc = crc16xmodem(channelValues, length);
+//                    if (readCrc == calculatedCrc) {
+//                        // Valid packet (no corruption)
                         write();
-                    }
-                    DSCOM_STATE_READY;
+//                    }
+                    dscom_rx_state = DSCOM_STATE_READY;
                 }
+                break;
+            default:
+                toggle();
                 break;
         }
         // Can add a routine here to turn lights off after a specific time with no signal, etc.     

@@ -35,3 +35,5 @@
 # MPLAB Build/Production Files
 /build/default/
 /dist/default/
+/dist/DS/
+/build/DS/

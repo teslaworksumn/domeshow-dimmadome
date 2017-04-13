@@ -12,11 +12,7 @@
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true">
-      <itemPath>domeshow_main.c</itemPath>
       <itemPath>domeshow_lib.h</itemPath>
-      <itemPath>dmx.c</itemPath>
-      <itemPath>dmx.h</itemPath>
-      <itemPath>dmxconfig.h</itemPath>
       <itemPath>dome_main.c</itemPath>
       <itemPath>crc16_xmodem.c</itemPath>
       <itemPath>crc16_xmodem.h</itemPath>
@@ -553,7 +549,7 @@
         <targetDevice>PIC18F27J13</targetDevice>
         <targetHeader></targetHeader>
         <targetPluginBoard></targetPluginBoard>
-        <platformTool>PICkit3PlatformTool</platformTool>
+        <platformTool>Simulator</platformTool>
         <languageToolchain>XC8</languageToolchain>
         <languageToolchainVersion>1.41</languageToolchainVersion>
         <platform>2</platform>
@@ -591,7 +587,7 @@
         <property key="identifier-length" value="255"/>
         <property key="local-generation" value="false"/>
         <property key="operation-mode" value="free"/>
-        <property key="opt-xc8-compiler-strict_ansi" value="false"/>
+        <property key="opt-xc8-compiler-strict_ansi" value="true"/>
         <property key="optimization-assembler" value="true"/>
         <property key="optimization-assembler-files" value="true"/>
         <property key="optimization-debug" value="false"/>
@@ -604,10 +600,10 @@
         <property key="optimization-stable-enable" value="false"/>
         <property key="preprocess-assembler" value="true"/>
         <property key="undefine-macros" value=""/>
-        <property key="use-cci" value="false"/>
+        <property key="use-cci" value="true"/>
         <property key="use-iar" value="false"/>
-        <property key="verbose" value="false"/>
-        <property key="warning-level" value="-3"/>
+        <property key="verbose" value="true"/>
+        <property key="warning-level" value="9"/>
         <property key="what-to-do" value="ignore"/>
       </HI-TECH-COMP>
       <HI-TECH-LINK>
@@ -699,14 +695,6 @@
         <property key="stack-size-main" value="auto"/>
         <property key="stack-type" value="compiled"/>
       </XC8-config-global>
-      <item path="domeshow_main.c" ex="true" overriding="false">
-        <HI-TECH-COMP>
-        </HI-TECH-COMP>
-        <HI-TECH-LINK>
-        </HI-TECH-LINK>
-        <XC8-config-global>
-        </XC8-config-global>
-      </item>
     </conf>
   </confs>
 </configurationDescriptor>
