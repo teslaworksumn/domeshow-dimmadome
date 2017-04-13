@@ -77,8 +77,8 @@ typedef enum {
 uint8_t channelValues[TOTAL_CHANNELS];
 DSCOM_RX_STATE dscom_rx_state;
 volatile uint8_t rxData[RX_BUFFER_SIZE];
-unsigned int head = 0;
-volatile unsigned int tail = 0;
+uint16_t head = 0;
+volatile uint16_t tail = 0;
 unsigned char crc_start = 0;
 unsigned char crc_end = 0;
 uint8_t num_magic_found = 0;
@@ -99,19 +99,27 @@ void interrupt isr() {
 
     if(RC1IE & RC1IF)
     {
-        RC1IF=0; //Clear interrupt flag
+        RC1IF=0; // Clear interrupt flag
 
         // Check for framing error
         if(RCSTA1bits.FERR)
         {
+            toggle();
             TXREG1 = 0x97;
-            return;
+            rxByte = RCREG1; // Clear framing error
+        } else {
+            rxByte = RCREG1;
+            rxData[tail] = rxByte;
+            tail = (tail + 1) & RX_BUFFER_SIZE;
         }
-        
-        rxByte = RCREG1;
-        rxData[tail] = rxByte;
-        tail = (tail + 1) & RX_BUFFER_SIZE;
     }
+}
+
+uint16_t get_tail() {
+    RC1IE = 0; // Disable interrupts to read value
+    uint16_t t = tail;
+    RC1IE = 1; // Re-enable interrupts
+    return t;
 }
 
 void cycle() {
@@ -140,7 +148,12 @@ void write() {
  * (giving a one byte buffer between head and tail)
  */
 int bytes_available() {
-    return tail - head;
+    int t = get_tail();
+    int available = t - head;
+    if (t < head) { // Looped around ring buffer
+        available = RX_BUFFER_SIZE - head + t;
+    }
+    return available;
 }
 
 /*
@@ -180,13 +193,17 @@ int main(void) {
     
     uint8_t rxByte;
     uint16_t length;
+    int num_bytes;
     
     while(1)
     {
+        __delay_ms(5);
         switch (dscom_rx_state) {
             case DSCOM_STATE_READY:
                 // Wait for magic bytes
-                if (bytes_available() > 0) {
+                num_bytes = bytes_available();
+                if (num_bytes > 0) {
+                    RC3=1;
                     rxByte = read_byte();
                     if (rxByte == magic[num_magic_found]) {
                         num_magic_found++;
@@ -202,6 +219,7 @@ int main(void) {
                 }
                 break;
             case DSCOM_STATE_PRE_PROCESSING:
+                toggle();
                 // Decode length (two bytes)
                 if (bytes_available() >= 2) {
                     length = read_two_bytes();
