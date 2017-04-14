@@ -40,8 +40,6 @@ void pin_init()
     TRISBbits.TRISB5 = 0;
     TRISBbits.TRISB4 = 0;
     TRISCbits.TRISC3 = 0;
-    
-    RC3 = 0;                        //This for troubleshooting?
 }
 
 void timer_init()
@@ -67,51 +65,6 @@ void timer_init()
     PR2 = 254;                  //PWM period = (PR2+1) * prescaler * Tcy * 4
     CCPR1L = 25;                //pulse width = CCPR1L * prescaler * Tcy * 4
 }
-
-
-void writeColor(int r, int g, int b) {
-    CCPR4L = 255 - r;
-    CCPR5L = 255 - g;
-    CCPR6L = 255 - b;
-    CCPR7L = 255 - r;
-    CCPR8L = 255 - g;
-    CCPR9L = 255 - b;
-}
-
-uint32_t packColor(int r, int g, int b) {
-	return (((long) r << 16) | ((long) g << 8) | ((long) b));
-}
-
-int getR(uint32_t x) {
-	return (int) (x >> 16);
-}
-
-int getG(uint32_t x) {
-	return (int) (x >> 8);
-}
-
-int getB(uint32_t x) {
-	return (int) (x);
-}
-
-void writePackedColor(uint32_t x) {
-	writeColor(getR(x), getG(x), getB(x));
-}
-
-uint32_t Wheel(int WheelPos) {
-	WheelPos = 255 - WheelPos;
-	if(WheelPos < 85) {
-		return packColor(255 - WheelPos * 3, 0, WheelPos * 3);
-	}
-	if(WheelPos < 170) {
-		WheelPos -= 85;
-		return packColor(0, WheelPos * 3, 255 - WheelPos * 3);
-	}
-	WheelPos -= 170;
-	return packColor(WheelPos * 3, 255 - WheelPos * 3, 0);
-}
-
-
 
 #ifdef	__cplusplus
 extern "C" {

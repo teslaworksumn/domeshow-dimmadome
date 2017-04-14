@@ -59,7 +59,7 @@
 
 #define CHIP_ADDRESS 0
 #define CHIP_CHANNELS 6
-#define TOTAL_CHANNELS 120
+#define TOTAL_CHANNELS 144
 #define RX_BUFFER_SIZE 0x03ff // 1024
 
 // State of the domeshow RX
@@ -69,6 +69,7 @@ typedef enum {
     DSCOM_STATE_PROCESSING
 } DSCOM_RX_STATE_t;
 
+uint8_t startChannel = CHIP_ADDRESS * CHIP_CHANNELS;
 uint8_t channelValues[TOTAL_CHANNELS];
 DSCOM_RX_STATE_t dscom_rx_state = DSCOM_STATE_READY;
 volatile uint8_t rxData[RX_BUFFER_SIZE];
@@ -79,17 +80,12 @@ unsigned char crc_end = 0;
 uint8_t num_magic_found = 0;
 uint8_t magic[4] = {0xDE, 0xAD, 0xBE, 0xEF};
 
-void toggle() {
-    RC3 = !RC3;
-}
-
 void setup(void) {
     
     timer_init();
     pin_init();
     uart_init();
         
-    TXSTA1bits.TXEN = 1;
     return;
 }
 
@@ -104,7 +100,6 @@ __interrupt(high_priority) void isr() {
         // Check for framing error
         if(RCSTA1bits.FERR)
         {
-            TXREG1 = 0x97;
             rxByte = RCREG1; // Clear framing error
         } else if (RCSTA1bits.OERR) {
             // clear error
@@ -127,12 +122,12 @@ uint16_t get_tail() {
 
 __inline void write() {
     //Not sure what's up with the ordering here...
-    CCPR4L = channelValues[3];      //RP7
-    CCPR5L = channelValues[1];      //RP8
-    CCPR6L = channelValues[2];      //RP9
-    CCPR7L = channelValues[0];      //RP10
-    CCPR8L = channelValues[4];      //RP12
-    CCPR9L = channelValues[5];      //RP17
+    CCPR4L = channelValues[startChannel + 3];      //RP7
+    CCPR5L = channelValues[startChannel + 1];      //RP8
+    CCPR6L = channelValues[startChannel + 2];      //RP9
+    CCPR7L = channelValues[startChannel + 0];      //RP10
+    CCPR8L = channelValues[startChannel + 4];      //RP12
+    CCPR9L = channelValues[startChannel + 5];      //RP17
 }
 
 /*
@@ -223,20 +218,18 @@ int main(void) {
                     read_packet(length);
                     
                     // Verify using XMODEM 16 CRC
-//                    uint16_t readCrc = read_two_bytes();
-//                    uint16_t calculatedCrc = crc16xmodem(channelValues, length);
-//                    if (readCrc == calculatedCrc) {
-//                        // Valid packet (no corruption)
+                    uint16_t readCrc = read_two_bytes();
+                    uint16_t calculatedCrc = crc16xmodem(channelValues, length);
+                    if (readCrc == calculatedCrc) {
+                        // Valid packet (no corruption)
                         write();
-//                    }
+                    }
                     dscom_rx_state = DSCOM_STATE_READY;
                 }
                 break;
             default:
-                toggle();
                 break;
         }
-        // Can add a routine here to turn lights off after a specific time with no signal, etc.     
     }
     
     return 0;
