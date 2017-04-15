@@ -219,11 +219,11 @@ int main(void) {
                     
                     // Verify using XMODEM 16 CRC
                     uint16_t readCrc = read_two_bytes();
-                    uint16_t calculatedCrc = crc16xmodem(channelValues, length);
-                    if (readCrc == calculatedCrc) {
-                        // Valid packet (no corruption)
+//                    uint16_t calculatedCrc = crc16xmodem(channelValues, length);
+//                    if (readCrc == calculatedCrc) {
+//                        // Valid packet (no corruption)
                         write();
-                    }
+//                    }
                     dscom_rx_state = DSCOM_STATE_READY;
                 }
                 break;
