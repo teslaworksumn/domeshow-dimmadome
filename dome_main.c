@@ -59,7 +59,7 @@
 
 #define CHIP_ADDRESS 0
 #define CHIP_CHANNELS 6
-#define TOTAL_CHANNELS 144
+#define MAX_PAYLOAD_SIZE 120
 #define RX_BUFFER_SIZE 0x03ff // 1024
 
 // State of the domeshow RX
@@ -70,7 +70,7 @@ typedef enum {
 } DSCOM_RX_STATE_t;
 
 uint8_t startChannel = CHIP_ADDRESS * CHIP_CHANNELS;
-uint8_t channelValues[TOTAL_CHANNELS];
+uint8_t channelValues[MAX_PAYLOAD_SIZE];
 DSCOM_RX_STATE_t dscom_rx_state = DSCOM_STATE_READY;
 volatile uint8_t rxData[RX_BUFFER_SIZE];
 uint16_t head = 0;
@@ -207,8 +207,12 @@ int main(void) {
                 // Decode length (two bytes)
                 if (bytes_available() >= 2) {
                     length = read_two_bytes();
-                    // Check for invalid length goes here
-                    dscom_rx_state = DSCOM_STATE_PROCESSING;
+                    // Check for invalid length
+                    if (length > MAX_PAYLOAD_SIZE) {
+                        dscom_rx_state = DSCOM_STATE_READY;
+                    } else {
+                        dscom_rx_state = DSCOM_STATE_PROCESSING;
+                    }
                 }
                 break;
             case DSCOM_STATE_PROCESSING:
