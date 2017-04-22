@@ -58,7 +58,7 @@
 #define _XTAL_FREQ 48000000     //Fosc frequency for _delay
 
 #define BOARD_ADDRESS 0
-#define PIC_ADDRESS 0
+#define PIC_ADDRESS 1
 #define BOARD_CHANNELS 9
 #define PIC_CHANNELS 5
 #define MAX_PAYLOAD_SIZE 120
@@ -185,6 +185,9 @@ void read_packet(uint16_t length) {
 int main(void) {
 
     setup();
+    
+    // Write all-on frame
+    write();
     
     uint8_t rxByte;
     uint16_t length;
