@@ -57,8 +57,10 @@
 
 #define _XTAL_FREQ 48000000     //Fosc frequency for _delay
 
-#define CHIP_ADDRESS 0
-#define CHIP_CHANNELS 6
+#define BOARD_ADDRESS 0
+#define PIC_ADDRESS 0
+#define BOARD_CHANNELS 9
+#define PIC_CHANNELS 5
 #define MAX_PAYLOAD_SIZE 120
 #define RX_BUFFER_SIZE 0x03ff // 1024
 
@@ -69,7 +71,7 @@ typedef enum {
     DSCOM_STATE_PROCESSING
 } DSCOM_RX_STATE_t;
 
-uint8_t startChannel = CHIP_ADDRESS * CHIP_CHANNELS;
+uint8_t startChannel = (BOARD_ADDRESS * BOARD_CHANNELS) + (PIC_ADDRESS * PIC_CHANNELS);
 uint8_t channelValues[MAX_PAYLOAD_SIZE];
 DSCOM_RX_STATE_t dscom_rx_state = DSCOM_STATE_READY;
 volatile uint8_t rxData[RX_BUFFER_SIZE];
@@ -85,7 +87,13 @@ void setup(void) {
     timer_init();
     pin_init();
     uart_init();
-        
+    
+    // Initialize channel output to all on
+    int i;
+    for (i=0; i < MAX_PAYLOAD_SIZE; i++) {
+        channelValues[i] = 255;
+    }
+    
     return;
 }
 
